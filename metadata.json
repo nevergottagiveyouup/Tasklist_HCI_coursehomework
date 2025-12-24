@@ -1,0 +1,5 @@
+{
+  "name": "IntelliTask HCI Framework",
+  "description": "A high-extensibility task management framework designed for Human-Computer Interaction (HCI) projects, featuring a robust atomic design system, centralized state management, and an AI-ready architecture.",
+  "requestFramePermissions": []
+}
