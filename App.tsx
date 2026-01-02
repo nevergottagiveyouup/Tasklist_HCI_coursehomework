@@ -2,6 +2,7 @@
 import { Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { TaskProvider, useTasks } from './context/TaskContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Input } from './components/Input';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
@@ -10,6 +11,9 @@ import { ICONS, THEME } from './constants';
 import { TaskPriority, TaskStatus, Task, SubTask } from './types';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { StatsView } from './components/StatsView';
+import { CompletedStatsView } from './components/CompletedStatsView';
+import { LoginPage } from './components/LoginPage';
+import { SettingsPage } from './components/SettingsPage';
 
 const parseDateValue = (value: Task['startDate']) => {
   const normalized = typeof value === 'string' && value.includes(' ') && !value.includes('T')
@@ -35,6 +39,7 @@ type NewTaskDraft = Pick<Task, 'title' | 'description' | 'priority' | 'startDate
 const Dashboard: React.FC = () => {
   const { state, addTask, updateTask, setFilter, setActiveSmartList } = useTasks();
   const { t, language, setLanguage } = useLanguage();
+  const { user, logout } = useAuth();
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebar_width');
@@ -63,6 +68,10 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isStatsPage = location.pathname.startsWith('/stats');
+  const isCompletedStatsPage = location.pathname.startsWith('/completed-stats');
+  const isLoginPage = location.pathname.startsWith('/login');
+  const isSettingsPage = location.pathname.startsWith('/settings');
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const startResizing = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -287,15 +296,15 @@ const Dashboard: React.FC = () => {
         </div>
         
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-          <button onClick={() => { setActiveSmartList('ALL'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'ALL' && !isStatsPage ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}>
+          <button onClick={() => { setActiveSmartList('ALL'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'ALL' && !isStatsPage && !isCompletedStatsPage ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}>
             <span className="truncate flex-1 text-left">{t('allTasks')}</span>
             <span className="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full text-[10px]">{counts.all}</span>
           </button>
-          <button onClick={() => { setActiveSmartList('TODAY'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'TODAY' && !isStatsPage ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}>
+          <button onClick={() => { setActiveSmartList('TODAY'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'TODAY' && !isStatsPage && !isCompletedStatsPage ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}>
             <span className="truncate flex-1 text-left">{t('today')}</span>
             <span className="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full text-[10px]">{counts.today}</span>
           </button>
-          <button onClick={() => { setActiveSmartList('UPCOMING'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'UPCOMING' && !isStatsPage ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}>
+          <button onClick={() => { setActiveSmartList('UPCOMING'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'UPCOMING' && !isStatsPage && !isCompletedStatsPage ? 'text-indigo-600 bg-indigo-50 shadow-sm ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}>
             <span className="truncate flex-1 text-left">{t('upcoming')}</span>
             <span className="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full text-[10px]">{counts.upcoming}</span>
           </button>
@@ -308,6 +317,16 @@ const Dashboard: React.FC = () => {
           >
             <ICONS.BarChart />
             任务统计
+          </NavLink>
+        </div>
+        <div className="px-4 pt-2">
+          <NavLink
+            to="/completed-stats"
+            className={({ isActive }) => `w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${isActive ? 'text-emerald-700 bg-emerald-50 shadow-sm ring-1 ring-emerald-200' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
+            onClick={() => { setIsAdding(false); setEditingTaskId(null); }}
+          >
+            <ICONS.Check />
+            完成统计
           </NavLink>
         </div>
         
@@ -326,12 +345,80 @@ const Dashboard: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center px-6 shrink-0 gap-4">
+        <header className="h-16 border-b border-slate-200 bg-white flex items-center px-6 shrink-0 gap-4 relative z-30">
           <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)} icon={<ICONS.Menu />} />
           <h2 className="text-lg font-black text-slate-800 tracking-tight">
-            {isStatsPage ? '任务统计' : (state.activeSmartList === 'ALL' ? t('allTasks') : state.activeSmartList === 'TODAY' ? t('today') : t('upcoming'))}
+            {isLoginPage ? '账户登录/注册' : isSettingsPage ? '账户设置' : isStatsPage ? '任务统计' : isCompletedStatsPage ? '完成统计' : (state.activeSmartList === 'ALL' ? t('allTasks') : state.activeSmartList === 'TODAY' ? t('today') : t('upcoming'))}
           </h2>
+          <div className="ml-auto flex items-center gap-4">
+            {!user && <p className="text-xs text-slate-400 hidden sm:block">请登录以使用全部功能</p>}
+            <div className="relative">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full px-2 py-1.5 flex items-center gap-2 border-slate-200"
+                onClick={() => setIsProfileMenuOpen(v => !v)}
+              >
+                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold uppercase overflow-hidden">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    (user?.nickname?.[0] || user?.username?.[0] || '游')
+                  )}
+                </div>
+                <div className="text-left hidden sm:block">
+                  <div className="text-xs font-bold text-slate-700 truncate">{user?.nickname || user?.username || '游客'}</div>
+                  <div className="text-[10px] text-slate-400">{user ? '欢迎回来' : '暂未登录'}</div>
+                </div>
+                <span className={`text-slate-400 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`}><ICONS.ChevronDown /></span>
+              </Button>
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 mt-3 w-56 bg-white border border-slate-100 rounded-2xl shadow-2xl p-2 z-40">
+                  <div className="px-3 py-2 border-b border-slate-100 mb-2">
+                    <div className="text-sm font-semibold text-slate-800">{user?.nickname || user?.username || '游客'}</div>
+                    <div className="text-[11px] text-slate-400">{user ? '已登录' : '未登录状态'}</div>
+                  </div>
+                  {user ? (
+                    <div className="space-y-1">
+                      <button
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 text-sm font-semibold text-slate-700"
+                        onClick={() => { setIsProfileMenuOpen(false); navigate('/settings'); }}
+                      >
+                        个人设置
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 text-sm font-semibold text-rose-600"
+                        onClick={async () => {
+                          await logout();
+                          setIsProfileMenuOpen(false);
+                          navigate('/login');
+                        }}
+                      >
+                        退出登录
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <button
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 text-sm font-semibold text-slate-700"
+                        onClick={() => { setIsProfileMenuOpen(false); navigate('/login'); }}
+                      >
+                        登录
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 text-sm font-semibold text-indigo-600"
+                        onClick={() => { setIsProfileMenuOpen(false); navigate('/login?mode=register'); }}
+                      >
+                        注册
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </header>
+        {isProfileMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setIsProfileMenuOpen(false)} />}
 
         <div className="flex-1 overflow-y-auto">
           <Routes>
@@ -503,6 +590,12 @@ const Dashboard: React.FC = () => {
               path="/stats"
               element={<StatsView tasks={state.tasks} filter={state.filter} highlightedTaskIds={highlightedTaskIds} onEditTask={openEditTask} />}
             />
+            <Route
+              path="/completed-stats"
+              element={<CompletedStatsView tasks={state.tasks} />}
+            />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
@@ -526,9 +619,11 @@ const Dashboard: React.FC = () => {
 const App: React.FC = () => {
   return (
     <LanguageProvider>
-      <TaskProvider>
-        <Dashboard />
-      </TaskProvider>
+      <AuthProvider>
+        <TaskProvider>
+          <Dashboard />
+        </TaskProvider>
+      </AuthProvider>
     </LanguageProvider>
   );
 };
