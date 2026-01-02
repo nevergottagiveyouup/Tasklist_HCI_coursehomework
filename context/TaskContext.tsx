@@ -1,6 +1,65 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Task, TaskPriority, TaskStatus, TaskState, SmartListType } from '../types';
+import { Task, TaskPriority, TaskStatus, TaskState, SmartListType, SubTask } from '../types';
+
+const formatDateTimeString = (value: Task['startDate']) => {
+  const pad = (num: number) => String(num).padStart(2, '0');
+  const normalized = typeof value === 'string' && value.includes(' ') && !value.includes('T')
+    ? value.replace(' ', 'T')
+    : value;
+  const date = normalized instanceof Date ? normalized : new Date(normalized);
+  if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : '';
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const toDate = (value: Task['startDate']) => {
+  const normalized = typeof value === 'string' && value.includes(' ') && !value.includes('T')
+    ? value.replace(' ', 'T')
+    : value;
+  const date = normalized instanceof Date ? normalized : new Date(normalized);
+  return date;
+};
+
+const deriveStatus = (task: Task, now: Date = new Date()): TaskStatus => {
+  // Completed tasks remain completed
+  if (task.status === TaskStatus.COMPLETED) return TaskStatus.COMPLETED;
+
+  const start = toDate(task.startDate);
+  const due = toDate(task.dueDate);
+
+  const hasSubTasks = (task.subTasks?.length ?? 0) > 0;
+  const allSubTasksDone = hasSubTasks && task.subTasks!.every(st => !!st.completed);
+
+  if (allSubTasksDone) return TaskStatus.COMPLETED;
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(due.getTime())) {
+    return TaskStatus.TODO;
+  }
+
+  if (now < start) return TaskStatus.TODO;
+  if (now > due) return TaskStatus.ARCHIVED;
+  return TaskStatus.IN_PROGRESS;
+};
+
+const normalizeTaskDates = (task: Task): Task => {
+  const normalized: Task = {
+    ...task,
+    startDate: formatDateTimeString(task.startDate),
+    dueDate: formatDateTimeString(task.dueDate),
+    durationType: task.durationType || 'short',
+    subTasks: task.subTasks?.map(st => ({
+      ...st,
+      startTime: formatDateTimeString(st.startTime as any),
+      endTime: formatDateTimeString(st.endTime as any),
+      completed: !!st.completed
+    })) || []
+  };
+
+  return {
+    ...normalized,
+    status: deriveStatus(normalized)
+  };
+};
 
 interface TaskContextType {
   state: TaskState;
@@ -33,14 +92,13 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('hci_tasks');
     if (saved) {
       try {
-        setState(prev => ({ ...prev, tasks: JSON.parse(saved) }));
+        const parsed: Task[] = JSON.parse(saved);
+        setState(prev => ({ ...prev, tasks: parsed.map(normalizeTaskDates) }));
       } catch (e) {
         console.error("Failed to parse tasks", e);
       }
     } else {
       const now = new Date();
-      const formatDate = (date: Date) => date.toISOString().split('T')[0];
-      
       const yesterday = new Date(now.getTime() - 86400000);
       const today = now;
       const tomorrow = new Date(now.getTime() + 86400000);
@@ -54,8 +112,10 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: '这是一个已经超过截止日期的任务，系统应自动标记为逾期。',
           priority: TaskPriority.URGENT,
           status: TaskStatus.TODO,
-          startDate: formatDate(longTimeAgo),
-          dueDate: formatDate(yesterday),
+          startDate: formatDateTimeString(longTimeAgo),
+          dueDate: formatDateTimeString(yesterday),
+          durationType: 'long',
+          subTasks: [],
           tags: ['Urgent'],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -66,8 +126,10 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: '从上周开始，持续到下周的长跨度任务。',
           priority: TaskPriority.HIGH,
           status: TaskStatus.IN_PROGRESS,
-          startDate: formatDate(yesterday),
-          dueDate: formatDate(nextWeek),
+          startDate: formatDateTimeString(yesterday),
+          dueDate: formatDateTimeString(nextWeek),
+          durationType: 'long',
+          subTasks: [],
           tags: ['Coding'],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -78,8 +140,10 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: '讨论关于时间轴布局的反馈。',
           priority: TaskPriority.MEDIUM,
           status: TaskStatus.TODO,
-          startDate: formatDate(today),
-          dueDate: formatDate(today),
+          startDate: formatDateTimeString(today),
+          dueDate: formatDateTimeString(today),
+          durationType: 'short',
+          subTasks: [],
           tags: ['Meeting'],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -90,8 +154,10 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: '下周才开始的任务，属于远期规划。',
           priority: TaskPriority.LOW,
           status: TaskStatus.TODO,
-          startDate: formatDate(nextWeek),
-          dueDate: formatDate(new Date(nextWeek.getTime() + 3 * 86400000)),
+          startDate: formatDateTimeString(nextWeek),
+          dueDate: formatDateTimeString(new Date(nextWeek.getTime() + 3 * 86400000)),
+          durationType: 'long',
+          subTasks: [],
           tags: ['Study'],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -108,17 +174,46 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newTask: Task = {
       ...taskData,
+      startDate: formatDateTimeString(taskData.startDate),
+      dueDate: formatDateTimeString(taskData.dueDate),
+      subTasks: taskData.subTasks?.map(st => ({
+        ...st,
+        startTime: formatDateTimeString(st.startTime as any),
+        endTime: formatDateTimeString(st.endTime as any)
+      })) || [],
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    setState(prev => ({ ...prev, tasks: [newTask, ...prev.tasks] }));
+    const derivedStatus = deriveStatus(newTask);
+    setState(prev => ({ ...prev, tasks: [{ ...newTask, status: derivedStatus }, ...prev.tasks] }));
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
+    const normalizedUpdates: Partial<Task> = { ...updates };
+    if (updates.startDate !== undefined) {
+      normalizedUpdates.startDate = formatDateTimeString(updates.startDate);
+    }
+    if (updates.dueDate !== undefined) {
+      normalizedUpdates.dueDate = formatDateTimeString(updates.dueDate);
+    }
+    if (updates.subTasks !== undefined) {
+      normalizedUpdates.subTasks = updates.subTasks.map(st => ({
+        ...st,
+        startTime: formatDateTimeString(st.startTime as any),
+        endTime: formatDateTimeString(st.endTime as any)
+      }));
+    }
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)
+      tasks: prev.tasks.map(t => {
+        if (t.id !== id) return t;
+        const merged: Task = { ...t, ...normalizedUpdates } as Task;
+        const nextStatus = normalizedUpdates.status === TaskStatus.COMPLETED
+          ? TaskStatus.COMPLETED
+          : deriveStatus(merged);
+        return { ...merged, status: nextStatus, updatedAt: new Date().toISOString() };
+      })
     }));
   }, []);
 

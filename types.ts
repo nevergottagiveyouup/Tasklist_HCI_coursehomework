@@ -10,7 +10,15 @@ export enum TaskStatus {
   TODO = 'TODO',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
-  ARCHIVED = 'ARCHIVED'
+  ARCHIVED = 'ARCHIVED',
+}
+
+export interface SubTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  startTime: string | Date;
+  endTime: string | Date;
 }
 
 export interface Task {
@@ -19,8 +27,11 @@ export interface Task {
   description: string;
   priority: TaskPriority;
   status: TaskStatus;
-  startDate: string; // 新增：起始时间
-  dueDate: string;
+  // 支持日期字符串（YYYY-MM-DD HH:mm / datetime-local）或 Date 实例
+  startDate: string | Date;
+  dueDate: string | Date;
+  durationType: 'short' | 'long';
+  subTasks?: SubTask[];
   tags: string[];
   createdAt: string;
   updatedAt: string;

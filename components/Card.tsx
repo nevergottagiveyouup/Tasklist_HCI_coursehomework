@@ -8,9 +8,10 @@ interface CardProps {
   onClick?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className = '', onClick }) => {
+export const Card = React.forwardRef<HTMLDivElement, CardProps>(({ children, className = '', onClick }, ref) => {
   return (
     <div 
+      ref={ref}
       className={`
         bg-white border border-slate-200 
         ${THEME.radius.lg} ${THEME.shadows.sm} 
@@ -22,4 +23,5 @@ export const Card: React.FC<CardProps> = ({ children, className = '', onClick })
       {children}
     </div>
   );
-};
+});
+Card.displayName = 'Card';
