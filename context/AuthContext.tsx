@@ -1,41 +1,26 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { loginRequest, registerRequest } from '../api';
 
-type UserRecord = {
+type SessionUser = {
   username: string;
-  password: string;
-  nickname: string;
+  nickname?: string;
   avatar?: string;
 };
 
-type SessionUser = Omit<UserRecord, 'password'>;
-
 type AuthContextType = {
   user: SessionUser | null;
+  token: string | null;
+  isGuest: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, nickname?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (payload: { nickname?: string; currentPassword?: string; newPassword?: string; avatar?: string }) => Promise<void>;
 };
 
-const USERS_KEY = 'hci_users';
 const SESSION_KEY = 'hci_session';
+const TOKEN_KEY = 'hci_token';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const readUsers = (): UserRecord[] => {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as UserRecord[];
-  } catch (e) {
-    console.error('Failed to read users', e);
-    return [];
-  }
-};
-
-const writeUsers = (users: UserRecord[]) => {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-};
 
 const readSession = (): SessionUser | null => {
   try {
@@ -53,64 +38,62 @@ const writeSession = (user: SessionUser | null) => {
   else localStorage.removeItem(SESSION_KEY);
 };
 
+const readToken = (): string | null => localStorage.getItem(TOKEN_KEY);
+const writeToken = (token: string | null) => {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     setUser(readSession());
+    setToken(readToken());
+  }, []);
+
+  const persistAuth = useCallback((sessionUser: SessionUser, authToken: string) => {
+    setUser(sessionUser);
+    setToken(authToken);
+    writeSession(sessionUser);
+    writeToken(authToken);
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    const users = readUsers();
-    const found = users.find(u => u.username === username && u.password === password);
-    if (!found) throw new Error('用户名或密码错误');
-    const sessionUser: SessionUser = { username: found.username, nickname: found.nickname, avatar: found.avatar };
-    setUser(sessionUser);
-    writeSession(sessionUser);
-  }, []);
+    const res = await loginRequest(username, password);
+    const previous = readSession();
+    const sessionUser: SessionUser = { username, nickname: previous?.nickname || username };
+    persistAuth(sessionUser, res.token);
+  }, [persistAuth]);
 
   const register = useCallback(async (username: string, password: string, nickname?: string) => {
-    const users = readUsers();
-    if (users.some(u => u.username === username)) {
-      throw new Error('用户名已存在');
-    }
-    const record: UserRecord = { username, password, nickname: nickname || username, avatar: undefined };
-    const next = [...users, record];
-    writeUsers(next);
-    const sessionUser: SessionUser = { username, nickname: record.nickname, avatar: record.avatar };
-    setUser(sessionUser);
-    writeSession(sessionUser);
-  }, []);
+    await registerRequest(username, password);
+    const res = await loginRequest(username, password);
+    const sessionUser: SessionUser = { username, nickname: nickname || username };
+    persistAuth(sessionUser, res.token);
+  }, [persistAuth]);
 
   const logout = useCallback(async () => {
     setUser(null);
+    setToken(null);
     writeSession(null);
+    writeToken(null);
   }, []);
 
   const updateProfile = useCallback(async (payload: { nickname?: string; currentPassword?: string; newPassword?: string; avatar?: string }) => {
-    const users = readUsers();
     if (!user) throw new Error('请先登录');
-    const idx = users.findIndex(u => u.username === user.username);
-    if (idx === -1) throw new Error('用户不存在');
-    const current = users[idx];
-
-    if (payload.newPassword) {
-      if (!payload.currentPassword) throw new Error('请提供当前密码');
-      if (payload.currentPassword !== current.password) throw new Error('当前密码不正确');
-      current.password = payload.newPassword;
-    }
-
-    if (payload.nickname) current.nickname = payload.nickname;
-    if (payload.avatar !== undefined) current.avatar = payload.avatar;
-
-    users[idx] = current;
-    writeUsers(users);
-    const sessionUser: SessionUser = { username: current.username, nickname: current.nickname, avatar: current.avatar };
-    setUser(sessionUser);
-    writeSession(sessionUser);
+    // 后端未提供更新资料接口，这里仅更新本地会话信息以避免功能中断。
+    const next: SessionUser = {
+      ...user,
+      nickname: payload.nickname || user.nickname || user.username,
+      avatar: payload.avatar ?? user.avatar
+    };
+    setUser(next);
+    writeSession(next);
   }, [user]);
 
-  const value = useMemo(() => ({ user, login, register, logout, updateProfile }), [user, login, register, logout, updateProfile]);
+  const value = useMemo(() => ({ user, token, isGuest: !token, login, register, logout, updateProfile }), [user, token, login, register, logout, updateProfile]);
 
   return (
     <AuthContext.Provider value={value}>

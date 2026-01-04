@@ -10,6 +10,7 @@ export const SettingsPage: React.FC = () => {
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const [selectedTheme, setSelectedTheme] = useState(theme);
   const [nickname, setNickname] = useState(user?.nickname || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -23,12 +24,18 @@ export const SettingsPage: React.FC = () => {
     if (!user) navigate('/login');
   }, [user, navigate]);
 
+  useEffect(() => {
+    setSelectedTheme(theme);
+  }, [theme]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setMessage('');
     setLoading(true);
     try {
+      // 先持久化主题，再保存昵称/密码
+      setTheme(selectedTheme);
       await updateProfile({ nickname: nickname.trim() || user?.username, currentPassword: currentPassword || undefined, newPassword: newPassword || undefined });
       setMessage('保存成功');
       setCurrentPassword('');
@@ -68,15 +75,18 @@ export const SettingsPage: React.FC = () => {
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => setTheme(opt.key as any)}
-                    className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${theme === opt.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-200'}`}
+                    onClick={() => setSelectedTheme(opt.key as any)}
+                    className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${selectedTheme === opt.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-200'}`}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
             </div>
-            <Input placeholder="昵称" value={nickname} onChange={e => setNickname(e.target.value)} />
+            <div className="space-y-2">
+              <div className="text-xs text-slate-500 font-semibold">昵称</div>
+              <Input placeholder="昵称" value={nickname} onChange={e => setNickname(e.target.value)} />
+            </div>
             <div className="text-xs text-slate-500 font-semibold">修改密码（可选）</div>
             <Input placeholder="当前密码" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
             <Input placeholder="新密码" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
