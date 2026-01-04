@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { TaskProvider, useTasks } from './context/TaskContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -34,7 +34,15 @@ const isSameDay = (a: Date, b: Date) =>
 
 const defaultDateTimeValue = () => toDateTimeLocalString(new Date());
 
-type NewTaskDraft = Pick<Task, 'title' | 'description' | 'priority' | 'startDate' | 'dueDate' | 'durationType'> & { subTasks: SubTask[] };
+type NewTaskDraft = Pick<Task, 'title' | 'description' | 'priority' | 'startDate' | 'dueDate'> & { subTasks: SubTask[] };
+
+const inferDurationType = (start: Task['startDate'], due: Task['dueDate']): Task['durationType'] => {
+  const startDate = parseDateValue(start);
+  const dueDate = parseDateValue(due);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(dueDate.getTime())) return 'short';
+  const diffMs = dueDate.getTime() - startDate.getTime();
+  return diffMs <= 24 * 60 * 60 * 1000 ? 'short' : 'long';
+};
 
 const Dashboard: React.FC = () => {
   const { state, addTask, updateTask, setFilter, setActiveSmartList } = useTasks();
@@ -61,9 +69,10 @@ const Dashboard: React.FC = () => {
     priority: TaskPriority.MEDIUM,
     startDate: defaultDateTimeValue(),
     dueDate: defaultDateTimeValue(),
-    durationType: 'short',
     subTasks: []
   });
+  const [pendingConflict, setPendingConflict] = useState<{ conflictTask: Task; data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>; editingId: string | null } | null>(null);
+  const inferredDuration = useMemo(() => inferDurationType(newTask.startDate, newTask.dueDate), [newTask.startDate, newTask.dueDate]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -72,6 +81,26 @@ const Dashboard: React.FC = () => {
   const isLoginPage = location.pathname.startsWith('/login');
   const isSettingsPage = location.pathname.startsWith('/settings');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  const findShortTaskConflict = useCallback((candidate: { startDate: Task['startDate']; dueDate: Task['dueDate']; id?: string; }) => {
+    const durationType = inferDurationType(candidate.startDate, candidate.dueDate);
+    if (durationType !== 'short') return null;
+
+    const start = parseDateValue(candidate.startDate);
+    const end = parseDateValue(candidate.dueDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+    return state.tasks.find(task => {
+      if (task.id === candidate.id) return false;
+      if (task.durationType !== 'short') return false;
+      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.ARCHIVED) return false;
+
+      const taskStart = parseDateValue(task.startDate);
+      const taskEnd = parseDateValue(task.dueDate);
+      const overlapMs = Math.min(taskEnd.getTime(), end.getTime()) - Math.max(taskStart.getTime(), start.getTime());
+      return overlapMs > 30 * 60 * 1000; // overlap longer than 30 minutes
+    }) || null;
+  }, [state.tasks]);
 
   const startResizing = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -104,21 +133,20 @@ const Dashboard: React.FC = () => {
     localStorage.setItem('sidebar_open', JSON.stringify(isSidebarOpen));
   }, [isSidebarOpen]);
 
-  const resetFormState = () => {
+  const resetFormState = useCallback(() => {
     setNewTask({
       title: '',
       description: '',
       priority: TaskPriority.MEDIUM,
       startDate: defaultDateTimeValue(),
       dueDate: defaultDateTimeValue(),
-      durationType: 'short',
       subTasks: []
     });
     setEditingTaskId(null);
     setFormError('');
     setIsAdding(false);
     setPendingRemoveSubTaskIndex(null);
-  };
+  }, []);
 
   const addSubTask = () => {
     setNewTask(prev => ({
@@ -150,6 +178,20 @@ const Dashboard: React.FC = () => {
     }));
   };
 
+  const persistTask = useCallback((data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, editingId: string | null) => {
+    if (editingId) {
+      updateTask(editingId, data);
+      setHighlightedTaskIds([editingId]);
+    } else {
+      const tempId = Math.random().toString(36).slice(2);
+      addTask({ ...data, id: tempId });
+      setHighlightedTaskIds([tempId]);
+    }
+
+    setPendingConflict(null);
+    resetFormState();
+  }, [addTask, resetFormState, updateTask]);
+
   const openCreateForm = () => {
     resetFormState();
     setIsAdding(true);
@@ -167,7 +209,6 @@ const Dashboard: React.FC = () => {
       priority: task.priority,
       startDate: toDateTimeLocalString(task.startDate),
       dueDate: toDateTimeLocalString(task.dueDate),
-      durationType: task.durationType ?? 'short',
       subTasks: (task.subTasks || []).map(st => ({
         ...st,
         startTime: toDateTimeLocalString(st.startTime),
@@ -180,17 +221,25 @@ const Dashboard: React.FC = () => {
   const handleSubmitTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTask.title.trim()) {
-      setFormError(t('taskTitlePlaceholder'));
+      setFormError(t('taskTitleMissing'));
       return;
     }
 
+    const startDateObj = parseDateValue(newTask.startDate);
+    const dueDateObj = parseDateValue(newTask.dueDate);
+    if (!Number.isNaN(startDateObj.getTime()) && !Number.isNaN(dueDateObj.getTime()) && dueDateObj <= startDateObj) {
+      setFormError(t('endAfterStartError'));
+      return;
+    }
+
+    const durationType = inferDurationType(newTask.startDate, newTask.dueDate);
     const baseData = {
       title: newTask.title.trim(),
       description: newTask.description.trim(),
       priority: newTask.priority,
       startDate: newTask.startDate,
       dueDate: newTask.dueDate,
-      durationType: newTask.durationType,
+      durationType,
       subTasks: newTask.subTasks.map(st => ({
         ...st,
         startTime: st.startTime,
@@ -200,16 +249,15 @@ const Dashboard: React.FC = () => {
       status: TaskStatus.TODO
     };
 
-    if (editingTaskId) {
-      updateTask(editingTaskId, baseData);
-      setHighlightedTaskIds([editingTaskId]);
-    } else {
-      const tempId = Math.random().toString(36).slice(2);
-      addTask({ ...baseData, id: tempId } as any);
-      setHighlightedTaskIds([tempId]);
+    const conflict = findShortTaskConflict({ ...baseData, id: editingTaskId || undefined });
+    if (conflict) {
+      setFormError('');
+      setHighlightedTaskIds([conflict.id]);
+      setPendingConflict({ conflictTask: conflict, data: baseData, editingId: editingTaskId });
+      return;
     }
 
-    resetFormState();
+    persistTask(baseData, editingTaskId);
   };
 
   const groupedTasks = useMemo(() => {
@@ -441,20 +489,12 @@ const Dashboard: React.FC = () => {
                           <textarea placeholder={t('taskDescPlaceholder')} value={newTask.description} onChange={(e) => setNewTask({...newTask, description: e.target.value})} className="w-full text-sm text-slate-500 border-none px-0 focus:ring-0 resize-none h-20 placeholder:text-slate-200" />
                           
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5 border-t border-slate-50">
-                            <div>
-                              <label className="block text-[10px] font-black uppercase text-slate-400 mb-3">任务类型</label>
-                              <div className="flex bg-slate-50 p-1 rounded-xl gap-1">
-                                {['short', 'long'].map(type => (
-                                  <button
-                                    key={type}
-                                    type="button"
-                                    onClick={() => setNewTask({ ...newTask, durationType: type as 'short' | 'long' })}
-                                    className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${newTask.durationType === type ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-black/5' : 'text-slate-400 hover:bg-slate-100'}`}
-                                  >
-                                    {type === 'short' ? '短期任务 (<24h)' : '长期任务 (≥24h)'}
-                                  </button>
-                                ))}
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">任务类型（自动判定）</label>
+                              <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-black ${inferredDuration === 'short' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>
+                                {inferredDuration === 'short' ? '短期任务（≤24h）' : '长期任务（＞24h）'}
                               </div>
+                              <p className="text-[11px] text-slate-400">根据开始/结束时间自动判断，无需手动切换。</p>
                             </div>
                             <div>
                               <label className="block text-[10px] font-black uppercase text-slate-400 mb-3">{t('taskPriorityLabel')}</label>
@@ -600,6 +640,18 @@ const Dashboard: React.FC = () => {
           </Routes>
         </div>
       </main>
+
+      <ConfirmDialog
+        open={!!pendingConflict}
+        message={`⚠️ 该任务与「${pendingConflict?.conflictTask.title || ''}」时间冲突，是否继续？`}
+        cancelLabel="调整时间"
+        confirmLabel="强制添加"
+        onCancel={() => setPendingConflict(null)}
+        onConfirm={() => {
+          if (!pendingConflict) return;
+          persistTask(pendingConflict.data, pendingConflict.editingId);
+        }}
+      />
 
       <ConfirmDialog
         open={pendingRemoveSubTaskIndex !== null}

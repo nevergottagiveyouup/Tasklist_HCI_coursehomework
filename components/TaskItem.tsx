@@ -78,7 +78,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
   return (
     <Card
       onClick={onEdit}
-      className={`p-4 mb-2 border-l-4 group transition-all hover:translate-x-1 hover:shadow-md border-l-${THEME.colors.primary} bg-white ${isCompleted ? 'opacity-70' : ''} ${highlighted ? 'border-red-400 animate-pulse' : ''}`}
+      className={`p-4 mb-2 border-l-4 group transition-all hover:translate-x-1 hover:shadow-md border-l-${THEME.colors.primary} bg-white ${isCompleted ? 'opacity-70' : ''}`}
     >
       <div className="flex items-start gap-4">
         <div className="flex-1 min-w-0">

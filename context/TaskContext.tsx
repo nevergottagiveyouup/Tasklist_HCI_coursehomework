@@ -63,7 +63,7 @@ const normalizeTaskDates = (task: Task): Task => {
 
 interface TaskContextType {
   state: TaskState;
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   setFilter: (filter: Partial<TaskState['filter']>) => void;
@@ -171,7 +171,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('hci_tasks', JSON.stringify(state.tasks));
   }, [state.tasks]);
 
-  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+    const providedId = taskData.id;
     const newTask: Task = {
       ...taskData,
       startDate: formatDateTimeString(taskData.startDate),
@@ -181,7 +182,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         startTime: formatDateTimeString(st.startTime as any),
         endTime: formatDateTimeString(st.endTime as any)
       })) || [],
-      id: Math.random().toString(36).substr(2, 9),
+      id: providedId || Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
