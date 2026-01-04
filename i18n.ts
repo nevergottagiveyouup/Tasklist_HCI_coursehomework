@@ -89,7 +89,7 @@ export const translations = {
       TODO: "待办",
       IN_PROGRESS: "进行中",
       COMPLETED: "已完成",
-      ARCHIVED: "已归档"
+      ARCHIVED: "已逾期"
     },
     priority: {
       LOW: "低",

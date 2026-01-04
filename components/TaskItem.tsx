@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Task, TaskStatus, SubTask } from '../types';
 import { Card } from './Card';
 import { Badge } from './Badge';
@@ -38,6 +38,12 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const [showAllSubTasks, setShowAllSubTasks] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30 * 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const subTasks = task.subTasks || [];
   const completedCount = subTasks.filter(st => st.completed).length;
@@ -77,7 +83,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
   };
 
   const timeInfo = useMemo(() => {
-    const now = new Date();
     const start = new Date(task.startDate);
     const end = new Date(task.dueDate);
     const totalDurationMs = Math.max(end.getTime() - start.getTime(), 0);
@@ -118,7 +123,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
       textClass,
       nowLabel: `${parts.time}`
     };
-  }, [task.startDate, task.dueDate, task.status]);
+  }, [task.startDate, task.dueDate, task.status, now]);
 
   const startParts = getDateParts(task.startDate);
   const endParts = getDateParts(task.dueDate);
