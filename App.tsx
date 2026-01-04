@@ -7,6 +7,7 @@ import { Input } from './components/Input';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
 import { TaskItem } from './components/TaskItem';
+import { ClockTimePicker } from './components/ClockTimePicker';
 import { ICONS, THEME } from './constants';
 import { TaskPriority, TaskStatus, Task, SubTask } from './types';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -50,6 +51,35 @@ const PRIORITY_TEXT: Record<TaskPriority, string> = {
   [TaskPriority.MEDIUM]: 'text-amber-600',
   [TaskPriority.HIGH]: 'text-orange-600',
   [TaskPriority.URGENT]: 'text-rose-600'
+};
+
+const splitDateTime = (value: Task['startDate']) => {
+  const dateObj = parseDateValue(value);
+  if (Number.isNaN(dateObj.getTime())) {
+    const now = new Date();
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return {
+      date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+      hour: now.getHours(),
+      minute: now.getMinutes()
+    };
+  }
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return {
+    date: `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}`,
+    hour: dateObj.getHours(),
+    minute: dateObj.getMinutes()
+  };
+};
+
+const withDatePart = (value: Task['startDate'], dateStr: string) => {
+  const parts = splitDateTime(value);
+  return `${dateStr}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+};
+
+const withTimePart = (value: Task['startDate'], hour: number, minute: number) => {
+  const parts = splitDateTime(value);
+  return `${parts.date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
 const Dashboard: React.FC = () => {
@@ -530,11 +560,35 @@ const Dashboard: React.FC = () => {
                             <div className="md:col-span-2 grid grid-cols-2 gap-4">
                               <div>
                                 <label className={`block text-[10px] font-black uppercase mb-3 ${themeStyles.mutedText}`}>{t('startDateLabel')}</label>
-                                <input type="datetime-local" value={toDateTimeLocalString(newTask.startDate)} onChange={(e) => setNewTask({...newTask, startDate: e.target.value})} className={`w-full px-4 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 ${themeStyles.input}`} />
+                                <div className="grid grid-cols-[1.1fr_0.9fr] gap-2">
+                                  <input
+                                    type="date"
+                                    value={splitDateTime(newTask.startDate).date}
+                                    onChange={(e) => setNewTask({...newTask, startDate: withDatePart(newTask.startDate, e.target.value)})}
+                                    className={`w-full px-4 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 calendar-picker ${themeStyles.input}`}
+                                  />
+                                  <ClockTimePicker
+                                    hour={splitDateTime(newTask.startDate).hour}
+                                    minute={splitDateTime(newTask.startDate).minute}
+                                    onChange={(h, m) => setNewTask({...newTask, startDate: withTimePart(newTask.startDate, h, m)})}
+                                  />
+                                </div>
                               </div>
                               <div>
                                 <label className={`block text-[10px] font-black uppercase mb-3 ${themeStyles.mutedText}`}>{t('taskDateLabel')}</label>
-                                <input type="datetime-local" value={toDateTimeLocalString(newTask.dueDate)} onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})} className={`w-full px-4 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 ${themeStyles.input}`} />
+                                <div className="grid grid-cols-[1.1fr_0.9fr] gap-2">
+                                  <input
+                                    type="date"
+                                    value={splitDateTime(newTask.dueDate).date}
+                                    onChange={(e) => setNewTask({...newTask, dueDate: withDatePart(newTask.dueDate, e.target.value)})}
+                                    className={`w-full px-4 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 calendar-picker ${themeStyles.input}`}
+                                  />
+                                  <ClockTimePicker
+                                    hour={splitDateTime(newTask.dueDate).hour}
+                                    minute={splitDateTime(newTask.dueDate).minute}
+                                    onChange={(h, m) => setNewTask({...newTask, dueDate: withTimePart(newTask.dueDate, h, m)})}
+                                  />
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -548,13 +602,7 @@ const Dashboard: React.FC = () => {
                             )}
                             {newTask.subTasks.map((st, idx) => (
                               <div key={st.id} className={`rounded-lg p-3 space-y-2 ${themeStyles.surfaceSoft}`}>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={st.completed}
-                                    onChange={(e) => updateSubTaskField(idx, 'completed', e.target.checked)}
-                                    className="h-4 w-4 text-indigo-600"
-                                  />
+                                <div className="flex items-center gap-3">
                                   <Input
                                     value={st.title}
                                     onChange={(e) => updateSubTaskField(idx, 'title', e.target.value)}
@@ -565,24 +613,38 @@ const Dashboard: React.FC = () => {
                                     删除
                                   </Button>
                                 </div>
-                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-2 text-[12px] ${themeStyles.mutedText}`}>
-                                  <div className="space-y-1">
-                                    <div className="font-semibold">开始时间</div>
-                                    <input
-                                      type="datetime-local"
-                                      value={toDateTimeLocalString(st.startTime)}
-                                      onChange={(e) => updateSubTaskField(idx, 'startTime', e.target.value)}
-                                      className={`w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 ${themeStyles.input}`}
-                                    />
+                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px] ${themeStyles.mutedText}`}>
+                                  <div className="space-y-2">
+                                    <div className="font-semibold">开始日期</div>
+                                    <div className="grid grid-cols-[1.1fr_0.9fr] gap-2">
+                                      <input
+                                        type="date"
+                                        value={splitDateTime(st.startTime).date}
+                                        onChange={(e) => updateSubTaskField(idx, 'startTime', withDatePart(st.startTime, e.target.value))}
+                                        className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 calendar-picker ${themeStyles.input}`}
+                                      />
+                                      <ClockTimePicker
+                                        hour={splitDateTime(st.startTime).hour}
+                                        minute={splitDateTime(st.startTime).minute}
+                                        onChange={(h, m) => updateSubTaskField(idx, 'startTime', withTimePart(st.startTime, h, m))}
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="space-y-1">
-                                    <div className="font-semibold">结束时间</div>
-                                    <input
-                                      type="datetime-local"
-                                      value={toDateTimeLocalString(st.endTime)}
-                                      onChange={(e) => updateSubTaskField(idx, 'endTime', e.target.value)}
-                                      className={`w-full px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 ${themeStyles.input}`}
-                                    />
+                                  <div className="space-y-2">
+                                    <div className="font-semibold">结束日期</div>
+                                    <div className="grid grid-cols-[1.1fr_0.9fr] gap-2">
+                                      <input
+                                        type="date"
+                                        value={splitDateTime(st.endTime).date}
+                                        onChange={(e) => updateSubTaskField(idx, 'endTime', withDatePart(st.endTime, e.target.value))}
+                                        className={`w-full px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 calendar-picker ${themeStyles.input}`}
+                                      />
+                                      <ClockTimePicker
+                                        hour={splitDateTime(st.endTime).hour}
+                                        minute={splitDateTime(st.endTime).minute}
+                                        onChange={(h, m) => updateSubTaskField(idx, 'endTime', withTimePart(st.endTime, h, m))}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               </div>

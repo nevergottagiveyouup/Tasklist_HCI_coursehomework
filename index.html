@@ -11,6 +11,19 @@
     body {
       font-family: 'Inter', sans-serif;
     }
+    /* Theme-aware tint for the native datetime picker icon (WebKit). */
+    .calendar-picker::-webkit-calendar-picker-indicator {
+      filter: invert(18%) sepia(91%) saturate(2963%) hue-rotate(234deg) brightness(91%) contrast(97%);
+      opacity: 0.9;
+    }
+    .dark .calendar-picker::-webkit-calendar-picker-indicator {
+      filter: invert(91%) sepia(6%) saturate(1287%) hue-rotate(191deg) brightness(102%) contrast(92%);
+      opacity: 0.9;
+    }
+    .eye-theme .calendar-picker::-webkit-calendar-picker-indicator {
+      filter: invert(43%) sepia(76%) saturate(903%) hue-rotate(9deg) brightness(97%) contrast(93%);
+      opacity: 0.95;
+    }
   </style>
 <script type="importmap">
 {
