@@ -61,15 +61,27 @@ export const StatsView: React.FC<StatsViewProps> = ({ tasks, filter, highlighted
   const [statsUnit, setStatsUnit] = useState<'month' | 'week' | 'day'>('month');
   const [expandedBuckets, setExpandedBuckets] = useState<string[]>([]);
 
+  const summary = useMemo(() => {
+    return tasks.reduce(
+      (acc, task) => {
+        acc.total += 1;
+        if (task.status === TaskStatus.COMPLETED) acc.completed += 1;
+        if (task.durationType === 'short') acc.short += 1;
+        if (task.durationType === 'long') acc.long += 1;
+        return acc;
+      },
+      { total: 0, completed: 0, short: 0, long: 0 }
+    );
+  }, [tasks]);
+
   const statsBuckets = useMemo(() => {
     const baseTasks = tasks.filter(task => {
       const dueDate = parseDateValue(task.dueDate);
       if (Number.isNaN(dueDate.getTime())) return false;
-      if (task.status === TaskStatus.COMPLETED) return false; // 只看未完成
 
       const matchSearch = task.title.toLowerCase().includes(filter.search.toLowerCase());
       const matchPriority = filter.priority === 'ALL' || task.priority === filter.priority;
-      const matchStatus = filter.status === 'ALL' ? task.status !== TaskStatus.COMPLETED : task.status === filter.status;
+      const matchStatus = filter.status === 'ALL' ? true : task.status === filter.status;
       return matchSearch && matchPriority && matchStatus;
     });
 
@@ -90,10 +102,15 @@ export const StatsView: React.FC<StatsViewProps> = ({ tasks, filter, highlighted
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-lg font-bold text-slate-800">任务统计</h3>
-          <p className="text-sm text-slate-500">按时间分布查看将截止的任务</p>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">短期 {summary.short}</span>
+            <span className="px-2 py-1 rounded-lg bg-amber-50 text-amber-700">长期 {summary.long}</span>
+            <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">已完成 {summary.completed}</span>
+            <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700">总计 {summary.total}</span>
+          </div>
         </div>
         <div className="flex gap-2">
           {([
@@ -124,6 +141,16 @@ export const StatsView: React.FC<StatsViewProps> = ({ tasks, filter, highlighted
           {statsBuckets.map(bucket => {
             const expanded = expandedBuckets.includes(bucket.key);
             const showDayOverload = statsUnit === 'day' && bucket.tasks.length >= 5;
+            const bucketSummary = bucket.tasks.reduce(
+              (acc, task) => {
+                acc.total += 1;
+                if (task.status === TaskStatus.COMPLETED) acc.completed += 1;
+                if (task.durationType === 'short') acc.short += 1;
+                if (task.durationType === 'long') acc.long += 1;
+                return acc;
+              },
+              { total: 0, completed: 0, short: 0, long: 0 }
+            );
             return (
               <div key={bucket.key} className="relative mb-5">
                 {showDayOverload && (
@@ -132,10 +159,18 @@ export const StatsView: React.FC<StatsViewProps> = ({ tasks, filter, highlighted
                   </div>
                 )}
                 <div className="absolute -left-[7px] top-2 w-3 h-3 rounded-full bg-indigo-500 shadow" />
-                <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl p-3">
-                  <div>
-                    <div className="text-sm font-bold text-slate-800">{bucket.label}</div>
-                    <div className="text-xs text-slate-500">{bucket.tasks.length} 个任务将截止</div>
+                <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl p-3 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div>
+                      <div className="text-sm font-bold text-slate-800">{bucket.label}</div>
+                      <div className="text-xs text-slate-500">{bucket.tasks.length} 个任务</div>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                      <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">短期 {bucketSummary.short}</span>
+                      <span className="px-2 py-1 rounded-lg bg-amber-50 text-amber-700">长期 {bucketSummary.long}</span>
+                      <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">完成 {bucketSummary.completed}</span>
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700">总计 {bucketSummary.total}</span>
+                    </div>
                   </div>
                   <Button
                     size="sm"
