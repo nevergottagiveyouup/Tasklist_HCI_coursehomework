@@ -7,6 +7,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { ICONS, THEME } from '../constants';
 import { useTasks } from '../context/TaskContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 
 interface TaskItemProps {
   task: Task;
@@ -33,6 +34,7 @@ const getDateParts = (dateStr: string | Date) => {
 export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, onEdit }) => {
   const { updateTask, deleteTask } = useTasks();
   const { t } = useLanguage();
+  const { styles: themeStyles } = useTheme();
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const [showAllSubTasks, setShowAllSubTasks] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -133,19 +135,19 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
         {/* ---------------- 顶部区域 ---------------- */}
         <div className="flex items-center gap-4 mb-3 pt-3">
           <div className="shrink-0 max-w-[20%] md:max-w-[160px]">
-            <h3 className={`text-lg font-bold truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+            <h3 className={`text-lg font-bold truncate ${isCompleted ? 'line-through opacity-60' : ''}`}>
               {task.title || '无标题'}
             </h3>
           </div>
 
           <div className="flex-1 flex items-center gap-2 min-w-0">
-            <div className="shrink-0 bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px]">
-              <span className="text-[10px] font-bold text-slate-400 leading-tight">{startParts.date}</span>
+            <div className={`shrink-0 px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px] ${themeStyles.surfaceSoft}`}>
+              <span className={`text-[10px] font-bold leading-tight ${themeStyles.mutedText}`}>{startParts.date}</span>
               <span className="text-xs font-black tabular-nums leading-tight">{startParts.time}</span>
             </div>
 
-            <div className="relative flex-1 h-2 bg-slate-100 rounded-full mx-1">
-              <div className="absolute inset-0 rounded-full bg-slate-100 shadow-inner" />
+            <div className="relative flex-1 h-2 rounded-full mx-1 bg-transparent">
+              <div className={`absolute inset-0 rounded-full opacity-70 ${themeStyles.surfaceSoft}`} />
               <div
                   className={`absolute left-0 top-0 h-full rounded-full opacity-50 transition-all duration-500 ${timeInfo.colorClass}`}
                   style={{ width: `${task.status === TaskStatus.COMPLETED ? 100 : timeInfo.progress}%` }}
@@ -166,13 +168,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
               )}
             </div>
 
-            <div className={`
-             shrink-0 border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px] transition-colors
-             ${timeInfo.isOverdue
-                ? 'bg-rose-50 border-rose-200 text-rose-600'
-                : 'bg-slate-100 border-slate-200 text-slate-600'}
-          `}>
-              <span className={`text-[10px] font-bold leading-tight ${timeInfo.isOverdue ? 'text-rose-400' : 'text-slate-400'}`}>{endParts.date}</span>
+            <div className={`shrink-0 px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px] transition-colors ${timeInfo.isOverdue ? 'bg-rose-50 border border-rose-200 text-rose-600' : themeStyles.surfaceSoft}`}>
+              <span className={`text-[10px] font-bold leading-tight ${timeInfo.isOverdue ? 'text-rose-400' : themeStyles.mutedText}`}>{endParts.date}</span>
               <span className="text-xs font-black tabular-nums leading-tight">{endParts.time}</span>
             </div>
           </div>
@@ -186,8 +183,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
           2. break-words: 单词太长时自动换行，防止撑破布局
           3. 移除了 line-clamp-2
         */}
-          <div className={`text-sm text-slate-500 mb-4 whitespace-pre-wrap break-words ${isCompleted ? 'line-through opacity-60' : ''}`}>
-            {task.description || <span className="text-slate-300 italic text-xs">暂无描述...</span>}
+          <div className={`text-sm mb-4 whitespace-pre-wrap break-words ${themeStyles.mutedText} ${isCompleted ? 'line-through opacity-60' : ''}`}>
+            {task.description || <span className="opacity-70 italic text-xs">暂无描述...</span>}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -195,20 +192,20 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
             <Badge variant={task.priority}>{t(`priority.${task.priority}`)}</Badge>
 
             {hasSubTasks && (
-                <span className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md font-bold">
-                {completedCount} / {subTasks.length}
-             </span>
+                 <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${themeStyles.surfaceSoft}`}>
+                 {completedCount} / {subTasks.length}
+               </span>
             )}
 
             <div className="ml-auto flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-              <Button
+                <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
+                  className="h-8 w-8 rounded-full transition-colors"
                   onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(true); }}
                   icon={<ICONS.Trash />}
-              />
-              <div className="w-px h-4 bg-slate-200"></div>
+                />
+                <div className={`w-px h-4 ${themeStyles.chromeBorder}`}></div>
               {hasSubTasks ? (
                   <>
                     <Button onClick={cancelAllSubTasks} variant="secondary" size="sm" className="px-3 py-1 h-8 text-xs font-bold" disabled={noSubTasksDone}>重置</Button>
@@ -224,10 +221,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
 
           {/* ---------------- 子任务区域 ---------------- */}
           {hasSubTasks && (
-              <div className="mt-4 border-t border-slate-50 pt-3">
+              <div className={`mt-4 pt-3`}>
                 <button
                     type="button"
-                    className="flex items-center gap-1 text-xs font-bold text-indigo-500 mb-2 hover:text-indigo-600 transition-colors"
+                    className="flex items-center gap-1 text-xs font-bold text-indigo-500 mb-2 hover:text-indigo-400 transition-colors"
                     onClick={(e) => { e.stopPropagation(); setShowAllSubTasks(v => !v); }}
                 >
                   <span>{showAllSubTasks ? '收起子任务' : '查看子任务详情'}</span>
@@ -240,7 +237,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
                         const stStart = getDateParts(st.startTime);
                         const stEnd = getDateParts(st.endTime);
                         return (
-                            <div key={st.id} className="bg-slate-50/80 border border-slate-100 rounded-lg p-2 flex items-center gap-3 hover:bg-slate-100 transition-colors" onClick={(e) => e.stopPropagation()}>
+                            <div key={st.id} className={`rounded-lg p-2 flex items-center gap-3 transition-colors ${themeStyles.surfaceSoft}` } onClick={(e) => e.stopPropagation()}>
                               <input
                                   type="checkbox"
                                   checked={st.completed}
@@ -248,8 +245,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
                                   className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-slate-300"
                               />
                               <div className="flex-1 min-w-0">
-                                <div className={`text-xs font-bold truncate ${st.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{st.title}</div>
-                                <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                <div className={`text-xs font-bold truncate ${st.completed ? 'line-through opacity-60' : ''}`}>{st.title}</div>
+                                <div className={`text-[10px] font-bold mt-0.5 ${themeStyles.mutedText}`}>
                                   {stStart.date} {stStart.time} - {stEnd.time}
                                 </div>
                               </div>

@@ -4,10 +4,12 @@ import { Input } from './Input';
 import { Button } from './Button';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
 
 export const SettingsPage: React.FC = () => {
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [nickname, setNickname] = useState(user?.nickname || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -55,6 +57,25 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
           <form className="space-y-4" onSubmit={handleSave}>
+            <div className="space-y-2">
+              <div className="text-xs text-slate-500 font-semibold">主题切换</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'light', label: '浅色' },
+                  { key: 'dark', label: '深色' },
+                  { key: 'eye', label: '护眼' }
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setTheme(opt.key as any)}
+                    className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${theme === opt.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-200'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Input placeholder="昵称" value={nickname} onChange={e => setNickname(e.target.value)} />
             <div className="text-xs text-slate-500 font-semibold">修改密码（可选）</div>
             <Input placeholder="当前密码" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />

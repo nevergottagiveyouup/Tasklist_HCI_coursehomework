@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from './Button';
+import { useTheme } from '../context/ThemeContext';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -18,12 +19,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
+  const { styles } = useTheme();
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={(e) => e.stopPropagation()}>
-      <div className="bg-white rounded-xl shadow-2xl w-[320px] p-5 space-y-4 border border-slate-100" onClick={(e) => e.stopPropagation()}>
-        <div className="text-sm text-slate-700 leading-relaxed">{message}</div>
+      <div className={`${styles.surface} rounded-xl shadow-2xl w-[320px] p-5 space-y-4`} onClick={(e) => e.stopPropagation()}>
+        <div className="text-sm leading-relaxed">{message}</div>
         <div className="flex justify-end gap-3">
           <Button
             type="button"

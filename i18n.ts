@@ -73,6 +73,7 @@ export const translations = {
     taskTitleMissing: "任务标题不能为空",
     taskDescPlaceholder: "添加描述（可选）...",
     taskDateLabel: "截止日期",
+    taskPriorityLabel: "任务优先级",
     startDateLabel: "开始日期",
     duration: "跨度 {days} 天",
     groups: {
