@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useCallback } from 'react';
 import { Task, TaskStatus, SubTask } from '../types';
 import { Card } from './Card';
@@ -15,12 +14,29 @@ interface TaskItemProps {
   onEdit?: () => void;
 }
 
+// 辅助函数：将日期和时间拆分开
+const getDateParts = (dateStr: string | Date) => {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return { date: '--月--日', time: '--:--' };
+
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const h = date.getHours().toString().padStart(2, '0');
+  const min = date.getMinutes().toString().padStart(2, '0');
+
+  return {
+    date: `${m}月${d}日`,
+    time: `${h}:${min}`
+  };
+};
+
 export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, onEdit }) => {
   const { updateTask, deleteTask } = useTasks();
   const { t } = useLanguage();
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const [showAllSubTasks, setShowAllSubTasks] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
   const subTasks = task.subTasks || [];
   const completedCount = subTasks.filter(st => st.completed).length;
   const hasSubTasks = subTasks.length > 0;
@@ -63,155 +79,198 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
     const start = new Date(task.startDate);
     const end = new Date(task.dueDate);
     const totalDurationMs = Math.max(end.getTime() - start.getTime(), 0);
-    const totalDays = Math.max(Math.ceil(totalDurationMs / (1000 * 60 * 60 * 24)), 1);
     const elapsedMs = now.getTime() - start.getTime();
-    const progress = totalDurationMs > 0
-      ? Math.min(Math.max((elapsedMs / totalDurationMs) * 100, 0), 100)
-      : now > end ? 100 : 0;
 
     const isOverdue = now > end && task.status !== TaskStatus.COMPLETED;
+
+    let progress = 0;
+    if (isOverdue) {
+      progress = 100;
+    } else if (totalDurationMs > 0) {
+      progress = (elapsedMs / totalDurationMs) * 100;
+    }
+
+    const clampedProgress = Math.min(Math.max(progress, 0), 100);
     const isDueSoon = !isOverdue && (end.getTime() - now.getTime()) < 86400000 && task.status !== TaskStatus.COMPLETED;
 
-    return { progress, isOverdue, isDueSoon, totalDays };
+    let colorClass = 'bg-indigo-500';
+    let textClass = 'text-indigo-600';
+
+    if (task.status === TaskStatus.COMPLETED) {
+      colorClass = 'bg-emerald-500';
+      textClass = 'text-emerald-600';
+    } else if (isOverdue) {
+      colorClass = 'bg-rose-500';
+      textClass = 'text-rose-600';
+    } else if (isDueSoon) {
+      colorClass = 'bg-amber-400';
+      textClass = 'text-amber-500';
+    }
+
+    const parts = getDateParts(now);
+
+    return {
+      progress: clampedProgress,
+      isOverdue,
+      colorClass,
+      textClass,
+      nowLabel: `${parts.time}`
+    };
   }, [task.startDate, task.dueDate, task.status]);
 
-  return (
-    <Card
-      onClick={onEdit}
-      className={`p-4 mb-2 border-l-4 group transition-all hover:translate-x-1 hover:shadow-md border-l-${THEME.colors.primary} bg-white ${isCompleted ? 'opacity-70' : ''}`}
-    >
-      <div className="flex items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className={`font-semibold text-slate-800 truncate ${isCompleted ? 'line-through text-slate-400' : ''}`}>
-              {task.title}
-            </h3>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(true); }} icon={<ICONS.Trash />} />
-            </div>
-          </div>
-          
-          <p className={`text-xs text-slate-500 line-clamp-1 mb-3 ${isCompleted ? 'line-through' : ''}`}>
-            {task.description}
-          </p>
+  const startParts = getDateParts(task.startDate);
+  const endParts = getDateParts(task.dueDate);
 
-          <div className="mb-4">
-            <div className="flex justify-between text-[10px] text-slate-400 mb-1.5 font-bold uppercase tracking-wider">
-              <div className="flex items-center gap-2">
-                <span>{new Date(task.startDate).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
-                <span className="bg-slate-100 px-1.5 rounded-md text-slate-500">
-                  {t('duration', { days: timeInfo.totalDays })}
-                </span>
-              </div>
-              {timeInfo.isOverdue ? (
-                <span className="text-rose-500">{t('groups.overdue')}</span>
-              ) : timeInfo.isDueSoon ? (
-                <span className="text-amber-500">{t('groups.today')}</span>
-              ) : (
-                <span>{new Date(task.dueDate).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
+  return (
+      <Card
+          onClick={onEdit}
+          className={`
+        p-5 mb-3 group transition-all duration-200 
+        hover:shadow-lg hover:-translate-y-0.5 border-l-4 
+        ${isCompleted ? 'opacity-70 grayscale-[0.3]' : ''}
+      `}
+      >
+        {/* ---------------- 顶部区域 ---------------- */}
+        <div className="flex items-center gap-4 mb-3 pt-3">
+          <div className="shrink-0 max-w-[20%] md:max-w-[160px]">
+            <h3 className={`text-lg font-bold truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+              {task.title || '无标题'}
+            </h3>
+          </div>
+
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            <div className="shrink-0 bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px]">
+              <span className="text-[10px] font-bold text-slate-400 leading-tight">{startParts.date}</span>
+              <span className="text-xs font-black tabular-nums leading-tight">{startParts.time}</span>
+            </div>
+
+            <div className="relative flex-1 h-2 bg-slate-100 rounded-full mx-1">
+              <div className="absolute inset-0 rounded-full bg-slate-100 shadow-inner" />
+              <div
+                  className={`absolute left-0 top-0 h-full rounded-full opacity-50 transition-all duration-500 ${timeInfo.colorClass}`}
+                  style={{ width: `${task.status === TaskStatus.COMPLETED ? 100 : timeInfo.progress}%` }}
+              />
+              {!isCompleted && (
+                  <div
+                      className="absolute top-1/2 -translate-y-1/2 z-20 transition-all duration-500 flex flex-col items-center"
+                      style={{ left: `${timeInfo.progress}%` }}
+                  >
+                    <div className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                      <div className={`px-2 py-0.5 rounded-lg text-[10px] font-black shadow-md ${timeInfo.colorClass} text-white tracking-wide tabular-nums`}>
+                        {timeInfo.nowLabel}
+                      </div>
+                      <div className={`w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-transparent border-t-current absolute left-1/2 -translate-x-1/2 -bottom-[4px] ${timeInfo.textClass.replace('text-', 'text-')}`} style={{ color: 'inherit' }} />
+                    </div>
+                    <div className={`w-3.5 h-3.5 rotate-45 border-2 border-white shadow-sm box-content ${timeInfo.colorClass}`} />
+                  </div>
               )}
             </div>
-            <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden ring-1 ring-slate-100">
-              <div 
-                className={`h-full transition-all duration-700 ease-out ${
-                  task.status === TaskStatus.COMPLETED ? 'bg-emerald-500' : 
-                  timeInfo.isOverdue ? 'bg-rose-500' : 
-                  timeInfo.isDueSoon ? 'bg-amber-400' : 'bg-indigo-500'
-                }`}
-                style={{ width: `${timeInfo.progress}%` }}
-              />
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Badge variant={task.status}>{t(`status.${task.status}`)}</Badge>
-            <Badge variant={task.priority}>{t(`priority.${task.priority}`)}</Badge>
-          </div>
 
-          {hasSubTasks && (
-            <div className="mt-3">
-              <div className="flex items-center gap-2 text-xs text-indigo-600 font-semibold">
-                <span>子任务</span>
-                {subTasks.length > 3 && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1"
-                    onClick={(e) => { e.stopPropagation(); setShowAllSubTasks(v => !v); }}
-                  >
-                    {showAllSubTasks ? '收起更多' : `展开剩余 ${subTasks.length - 3} 个`}
-                    <span className={`transition-transform ${showAllSubTasks ? 'rotate-180' : ''}`}><ICONS.ChevronDown /></span>
-                  </button>
-                )}
-              </div>
-              <div className="mt-2 space-y-2">
-                {(showAllSubTasks ? subTasks : subTasks.slice(0, 3)).map(st => (
-                  <div key={st.id} className="bg-gray-50 border border-slate-100 rounded-lg p-2 pl-4 flex items-start gap-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium truncate ${st.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{st.title}</div>
-                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
-                        <span>{new Date(st.startTime).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
-                        <span className="text-slate-300">→</span>
-                        <span>{new Date(st.endTime).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={st.completed ? 'secondary' : 'primary'}
-                      onClick={(e) => { e.stopPropagation(); toggleSubTask(st); }}
-                      className="whitespace-nowrap"
-                    >
-                      {st.completed ? '取消完成' : '完成'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
+            <div className={`
+             shrink-0 border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px] transition-colors
+             ${timeInfo.isOverdue
+                ? 'bg-rose-50 border-rose-200 text-rose-600'
+                : 'bg-slate-100 border-slate-200 text-slate-600'}
+          `}>
+              <span className={`text-[10px] font-bold leading-tight ${timeInfo.isOverdue ? 'text-rose-400' : 'text-slate-400'}`}>{endParts.date}</span>
+              <span className="text-xs font-black tabular-nums leading-tight">{endParts.time}</span>
             </div>
-          )}
-
-          <div className="flex justify-end mt-4 gap-2" onClick={(e) => e.stopPropagation()}>
-            {hasSubTasks ? (
-              <>
-                <Button
-                  onClick={(e) => { e.stopPropagation(); cancelAllSubTasks(); }}
-                  variant="secondary"
-                  size="sm"
-                  className="rounded-lg px-4 py-2"
-                  disabled={noSubTasksDone}
-                >
-                  一键取消完成
-                </Button>
-                <Button
-                  onClick={(e) => { e.stopPropagation(); completeAllSubTasks(); }}
-                  variant="primary"
-                  size="sm"
-                  className="rounded-lg px-4 py-2"
-                  disabled={allSubTasksDone}
-                >
-                  一键完成
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
-                variant={isCompleted ? 'secondary' : 'primary'}
-                size="sm"
-                className="rounded-lg px-4 py-2"
-              >
-                {isCompleted ? '取消完成' : '完成'}
-              </Button>
-            )}
           </div>
         </div>
-      </div>
-      <ConfirmDialog
-        open={confirmDeleteOpen}
-        message={`确定要删除任务「${task.title}」吗？此操作不可恢复。`}
-        onCancel={() => setConfirmDeleteOpen(false)}
-        onConfirm={() => {
-          deleteTask(task.id);
-          setConfirmDeleteOpen(false);
-        }}
-      />
-    </Card>
+
+        {/* ---------------- 描述与操作栏 ---------------- */}
+        <div className="pl-1">
+          {/*
+          修改重点在这里：
+          1. whitespace-pre-wrap: 保留换行符和空格
+          2. break-words: 单词太长时自动换行，防止撑破布局
+          3. 移除了 line-clamp-2
+        */}
+          <div className={`text-sm text-slate-500 mb-4 whitespace-pre-wrap break-words ${isCompleted ? 'line-through opacity-60' : ''}`}>
+            {task.description || <span className="text-slate-300 italic text-xs">暂无描述...</span>}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant={task.status}>{t(`status.${task.status}`)}</Badge>
+            <Badge variant={task.priority}>{t(`priority.${task.priority}`)}</Badge>
+
+            {hasSubTasks && (
+                <span className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md font-bold">
+                {completedCount} / {subTasks.length}
+             </span>
+            )}
+
+            <div className="ml-auto flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+              <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(true); }}
+                  icon={<ICONS.Trash />}
+              />
+              <div className="w-px h-4 bg-slate-200"></div>
+              {hasSubTasks ? (
+                  <>
+                    <Button onClick={cancelAllSubTasks} variant="secondary" size="sm" className="px-3 py-1 h-8 text-xs font-bold" disabled={noSubTasksDone}>重置</Button>
+                    <Button onClick={completeAllSubTasks} variant="primary" size="sm" className="px-3 py-1 h-8 text-xs font-bold" disabled={allSubTasksDone}>全完成</Button>
+                  </>
+              ) : (
+                  <Button onClick={toggleStatus} variant={isCompleted ? 'secondary' : 'primary'} size="sm" className="px-4 py-1 h-8 text-xs font-bold">
+                    {isCompleted ? '撤销' : '完成'}
+                  </Button>
+              )}
+            </div>
+          </div>
+
+          {/* ---------------- 子任务区域 ---------------- */}
+          {hasSubTasks && (
+              <div className="mt-4 border-t border-slate-50 pt-3">
+                <button
+                    type="button"
+                    className="flex items-center gap-1 text-xs font-bold text-indigo-500 mb-2 hover:text-indigo-600 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); setShowAllSubTasks(v => !v); }}
+                >
+                  <span>{showAllSubTasks ? '收起子任务' : '查看子任务详情'}</span>
+                  <span className={`transition-transform duration-200 ${showAllSubTasks ? 'rotate-180' : ''}`}><ICONS.ChevronDown size={12} /></span>
+                </button>
+
+                {showAllSubTasks && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                      {subTasks.map(st => {
+                        const stStart = getDateParts(st.startTime);
+                        const stEnd = getDateParts(st.endTime);
+                        return (
+                            <div key={st.id} className="bg-slate-50/80 border border-slate-100 rounded-lg p-2 flex items-center gap-3 hover:bg-slate-100 transition-colors" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                  type="checkbox"
+                                  checked={st.completed}
+                                  onChange={() => toggleSubTask(st)}
+                                  className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-slate-300"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-xs font-bold truncate ${st.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{st.title}</div>
+                                <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                  {stStart.date} {stStart.time} - {stEnd.time}
+                                </div>
+                              </div>
+                            </div>
+                        );
+                      })}
+                    </div>
+                )}
+              </div>
+          )}
+        </div>
+
+        <ConfirmDialog
+            open={confirmDeleteOpen}
+            message={`确定要删除任务「${task.title}」吗？此操作不可恢复。`}
+            onCancel={() => setConfirmDeleteOpen(false)}
+            onConfirm={() => {
+              deleteTask(task.id);
+              setConfirmDeleteOpen(false);
+            }}
+        />
+      </Card>
   );
 };
