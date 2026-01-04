@@ -14,7 +14,7 @@ interface TaskItemProps {
   onEdit?: () => void;
 }
 
-// 辅助函数：将日期和时间拆分开，返回对象
+// 辅助函数：将日期和时间拆分开
 const getDateParts = (dateStr: string | Date) => {
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return { date: '--月--日', time: '--:--' };
@@ -43,7 +43,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
   const allSubTasksDone = hasSubTasks && completedCount === subTasks.length;
   const noSubTasksDone = hasSubTasks && completedCount === 0;
 
-  // --- 逻辑保持不变 ---
   const recomputeParentStatus = (subTasks: SubTask[]) => {
     if (!subTasks.length) return TaskStatus.TODO;
     const allDone = subTasks.every(st => st.completed);
@@ -75,7 +74,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
     updateTask(task.id, { status: TaskStatus.TODO, subTasks: updatedSubTasks });
   };
 
-  // --- 样式与进度计算逻辑 ---
   const timeInfo = useMemo(() => {
     const now = new Date();
     const start = new Date(task.startDate);
@@ -83,12 +81,11 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
     const totalDurationMs = Math.max(end.getTime() - start.getTime(), 0);
     const elapsedMs = now.getTime() - start.getTime();
 
-    // 修复 Bug：如果是 Overdue (当前时间 > 结束时间)，强制设为 100%
     const isOverdue = now > end && task.status !== TaskStatus.COMPLETED;
 
     let progress = 0;
     if (isOverdue) {
-      progress = 100; // 强制末端
+      progress = 100;
     } else if (totalDurationMs > 0) {
       progress = (elapsedMs / totalDurationMs) * 100;
     }
@@ -110,7 +107,6 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
       textClass = 'text-amber-500';
     }
 
-    // 格式化当前时间气泡
     const parts = getDateParts(now);
 
     return {
@@ -118,11 +114,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
       isOverdue,
       colorClass,
       textClass,
-      nowLabel: `${parts.time}` // 气泡只显示时间，因为太长了不好看，或者你可以改回 full string
+      nowLabel: `${parts.time}`
     };
   }, [task.startDate, task.dueDate, task.status]);
 
-  // 预先计算起止时间的显示部分
   const startParts = getDateParts(task.startDate);
   const endParts = getDateParts(task.dueDate);
 
@@ -136,55 +131,42 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
         ${highlighted ? 'border-red-400 animate-pulse ring-2 ring-red-100' : `border-l-${THEME.colors.primary}`}
       `}
       >
-        {/* ---------------- 顶部区域：标题 + 时间进度条 ---------------- */}
+        {/* ---------------- 顶部区域 ---------------- */}
         <div className="flex items-center gap-4 mb-3 pt-3">
-
-          {/* 左侧：标题 */}
           <div className="shrink-0 max-w-[20%] md:max-w-[160px]">
             <h3 className={`text-lg font-bold truncate ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800'}`}>
               {task.title || '无标题'}
             </h3>
           </div>
 
-          {/* 右侧：时间轴系统 */}
           <div className="flex-1 flex items-center gap-2 min-w-0">
-
-            {/* 开始时间 - 双行显示 */}
             <div className="shrink-0 bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px]">
               <span className="text-[10px] font-bold text-slate-400 leading-tight">{startParts.date}</span>
               <span className="text-xs font-black tabular-nums leading-tight">{startParts.time}</span>
             </div>
 
-            {/* 进度条容器 */}
             <div className="relative flex-1 h-2 bg-slate-100 rounded-full mx-1">
               <div className="absolute inset-0 rounded-full bg-slate-100 shadow-inner" />
-
               <div
                   className={`absolute left-0 top-0 h-full rounded-full opacity-50 transition-all duration-500 ${timeInfo.colorClass}`}
                   style={{ width: `${task.status === TaskStatus.COMPLETED ? 100 : timeInfo.progress}%` }}
               />
-
-              {/* 当前时间指示器 */}
               {!isCompleted && (
                   <div
                       className="absolute top-1/2 -translate-y-1/2 z-20 transition-all duration-500 flex flex-col items-center"
                       style={{ left: `${timeInfo.progress}%` }}
                   >
-                    {/* 悬浮气泡 */}
                     <div className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
                       <div className={`px-2 py-0.5 rounded-lg text-[10px] font-black shadow-md ${timeInfo.colorClass} text-white tracking-wide tabular-nums`}>
                         {timeInfo.nowLabel}
                       </div>
                       <div className={`w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-transparent border-t-current absolute left-1/2 -translate-x-1/2 -bottom-[4px] ${timeInfo.textClass.replace('text-', 'text-')}`} style={{ color: 'inherit' }} />
                     </div>
-
-                    {/* 菱形箭头 */}
                     <div className={`w-3.5 h-3.5 rotate-45 border-2 border-white shadow-sm box-content ${timeInfo.colorClass}`} />
                   </div>
               )}
             </div>
 
-            {/* 结束时间 - 双行显示 */}
             <div className={`
              shrink-0 border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center justify-center min-w-[60px] transition-colors
              ${timeInfo.isOverdue
@@ -195,15 +177,19 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
               <span className="text-xs font-black tabular-nums leading-tight">{endParts.time}</span>
             </div>
           </div>
-
-          {/* 以前这里的删除按钮已被移除 */}
         </div>
 
         {/* ---------------- 描述与操作栏 ---------------- */}
         <div className="pl-1">
-          <p className={`text-sm text-slate-500 line-clamp-2 mb-4 ${isCompleted ? 'line-through opacity-60' : ''}`}>
+          {/*
+          修改重点在这里：
+          1. whitespace-pre-wrap: 保留换行符和空格
+          2. break-words: 单词太长时自动换行，防止撑破布局
+          3. 移除了 line-clamp-2
+        */}
+          <div className={`text-sm text-slate-500 mb-4 whitespace-pre-wrap break-words ${isCompleted ? 'line-through opacity-60' : ''}`}>
             {task.description || <span className="text-slate-300 italic text-xs">暂无描述...</span>}
-          </p>
+          </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <Badge variant={task.status}>{t(`status.${task.status}`)}</Badge>
@@ -215,10 +201,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
              </span>
             )}
 
-            {/* 右下角操作区域 */}
             <div className="ml-auto flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-
-              {/* 修改点 3：删除按钮移到这里 */}
               <Button
                   variant="ghost"
                   size="sm"
@@ -226,11 +209,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, highlighted = false, o
                   onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(true); }}
                   icon={<ICONS.Trash />}
               />
-
-              {/* 分隔线 */}
               <div className="w-px h-4 bg-slate-200"></div>
-
-              {/* 主操作按钮 */}
               {hasSubTasks ? (
                   <>
                     <Button onClick={cancelAllSubTasks} variant="secondary" size="sm" className="px-3 py-1 h-8 text-xs font-bold" disabled={noSubTasksDone}>重置</Button>
