@@ -301,66 +301,71 @@ const Dashboard: React.FC = () => {
 
   const groupedTasks = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const tomorrow = new Date(now.getTime() + 86400000);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const filtered = state.tasks.filter(task => {
-      const startDate = toDateTimeLocalString(task.startDate).split('T')[0];
-      const dueDate = toDateTimeLocalString(task.dueDate).split('T')[0];
-
-      if (state.activeSmartList === 'TODAY' && dueDate !== todayStr) return false;
-      if (state.activeSmartList === 'UPCOMING' && dueDate <= todayStr) return false;
+      const durationMatch = state.activeSmartList === 'ALL'
+        ? true
+        : state.activeSmartList === 'SHORT'
+          ? task.durationType === 'short'
+          : task.durationType === 'long';
 
       const matchSearch = task.title.toLowerCase().includes(state.filter.search.toLowerCase());
       const matchStatus = state.filter.status === 'ALL' || task.status === state.filter.status;
       const matchPriority = state.filter.priority === 'ALL' || task.priority === state.filter.priority;
-      return matchSearch && matchStatus && matchPriority;
+      return durationMatch && matchSearch && matchStatus && matchPriority;
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      const priorityRank: Record<TaskPriority, number> = {
+        [TaskPriority.URGENT]: 4,
+        [TaskPriority.HIGH]: 3,
+        [TaskPriority.MEDIUM]: 2,
+        [TaskPriority.LOW]: 1
+      };
+      const diffPriority = priorityRank[b.priority] - priorityRank[a.priority];
+      if (diffPriority !== 0) return diffPriority;
+      const aDue = parseDateValue(a.dueDate).getTime();
+      const bDue = parseDateValue(b.dueDate).getTime();
+      return aDue - bDue;
     });
 
     const groups: Record<string, Task[]> = {
-      overdue: [],
-      active: [],
+      past: [],
       today: [],
       tomorrow: [],
-      thisWeek: [],
-      future: [],
+      dayAfter: [],
+      within7: [],
+      within30: [],
+      beyond30: [],
       completed: []
     };
 
-    filtered.forEach(task => {
+    sorted.forEach(task => {
       if (task.status === TaskStatus.COMPLETED) {
         groups.completed.push(task);
         return;
       }
-      const startDate = parseDateValue(task.startDate);
       const dueDate = parseDateValue(task.dueDate);
+      const diffDays = Math.floor((dueDate.getTime() - startOfToday.getTime()) / 86400000);
 
-      if (dueDate < now) {
-        groups.overdue.push(task);
-      } else if (startDate < now && dueDate >= now) {
-        groups.active.push(task);
-      } else if (isSameDay(dueDate, now)) {
-        groups.today.push(task);
-      } else if (isSameDay(dueDate, tomorrow)) {
-        groups.tomorrow.push(task);
-      } else {
-        const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 86400));
-        if (diffDays <= 7) groups.thisWeek.push(task);
-        else groups.future.push(task);
-      }
+      if (diffDays < 0) groups.past.push(task);
+      else if (diffDays === 0) groups.today.push(task);
+      else if (diffDays === 1) groups.tomorrow.push(task);
+      else if (diffDays === 2) groups.dayAfter.push(task);
+      else if (diffDays <= 7) groups.within7.push(task);
+      else if (diffDays <= 30) groups.within30.push(task);
+      else groups.beyond30.push(task);
     });
 
     return groups;
   }, [state.tasks, state.filter, state.activeSmartList]);
 
   const counts = useMemo(() => {
-    const today = new Date();
-    const startOfTomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
     return {
       all: state.tasks.length,
-      today: state.tasks.filter(t => isSameDay(parseDateValue(t.dueDate), today)).length,
-      upcoming: state.tasks.filter(t => parseDateValue(t.dueDate) >= startOfTomorrow).length,
+      short: state.tasks.filter(t => t.durationType === 'short').length,
+      long: state.tasks.filter(t => t.durationType === 'long').length,
       pending: state.tasks.filter(t => t.status !== TaskStatus.COMPLETED).length
     };
   }, [state.tasks]);
@@ -387,13 +392,13 @@ const Dashboard: React.FC = () => {
             <span className="truncate flex-1 text-left">{t('allTasks')}</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] ${themeStyles.surfaceSoft}`}>{counts.all}</span>
           </button>
-          <button onClick={() => { setActiveSmartList('TODAY'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'TODAY' && !isStatsPage && !isCompletedStatsPage ? themeStyles.pillActive : themeStyles.pillInactive}`}>
-            <span className="truncate flex-1 text-left">{t('today')}</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${themeStyles.surfaceSoft}`}>{counts.today}</span>
+          <button onClick={() => { setActiveSmartList('SHORT'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'SHORT' && !isStatsPage && !isCompletedStatsPage ? themeStyles.pillActive : themeStyles.pillInactive}`}>
+            <span className="truncate flex-1 text-left">短期</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${themeStyles.surfaceSoft}`}>{counts.short}</span>
           </button>
-          <button onClick={() => { setActiveSmartList('UPCOMING'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'UPCOMING' && !isStatsPage && !isCompletedStatsPage ? themeStyles.pillActive : themeStyles.pillInactive}`}>
-            <span className="truncate flex-1 text-left">{t('upcoming')}</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${themeStyles.surfaceSoft}`}>{counts.upcoming}</span>
+          <button onClick={() => { setActiveSmartList('LONG'); navigate('/'); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all ${state.activeSmartList === 'LONG' && !isStatsPage && !isCompletedStatsPage ? themeStyles.pillActive : themeStyles.pillInactive}`}>
+            <span className="truncate flex-1 text-left">长期</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${themeStyles.surfaceSoft}`}>{counts.long}</span>
           </button>
         </nav>
         <div className="px-4 pt-2">
@@ -435,7 +440,7 @@ const Dashboard: React.FC = () => {
         <header className={`h-16 border-b ${themeStyles.chromeBorder} ${themeStyles.chromeBg} flex items-center px-6 shrink-0 gap-4 relative z-30`}>
           <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)} icon={<ICONS.Menu />} />
           <h2 className="text-lg font-black tracking-tight">
-            {isLoginPage ? '账户登录/注册' : isSettingsPage ? '账户设置' : isStatsPage ? '任务统计' : isCompletedStatsPage ? '完成统计' : (state.activeSmartList === 'ALL' ? t('allTasks') : state.activeSmartList === 'TODAY' ? t('today') : t('upcoming'))}
+            {isLoginPage ? '账户登录/注册' : isSettingsPage ? '账户设置' : isStatsPage ? '任务统计' : isCompletedStatsPage ? '完成统计' : (state.activeSmartList === 'ALL' ? t('allTasks') : state.activeSmartList === 'SHORT' ? '短期' : '长期')}
           </h2>
           <div className="ml-auto flex items-center gap-4">
             {!user && <p className={`text-xs hidden sm:block ${themeStyles.mutedText}`}>请登录以使用全部功能</p>}
@@ -677,16 +682,28 @@ const Dashboard: React.FC = () => {
                   </section>
 
                   <div className="space-y-12 pb-32">
-                    {(Object.keys(groupedTasks) as Array<keyof typeof groupedTasks>).map(groupKey => {
+                    {(['past','today','tomorrow','dayAfter','within7','within30','beyond30','completed'] as Array<keyof typeof groupedTasks>).map(groupKey => {
                       const tasks = groupedTasks[groupKey];
                       if (tasks.length === 0) return null;
-                      
+                      const labelMap: Record<keyof typeof groupedTasks, string> = {
+                        past: '以往',
+                        today: '今天',
+                        tomorrow: '明天',
+                        dayAfter: '后天',
+                        within7: '7天内',
+                        within30: '30天内',
+                        beyond30: '30天后',
+                        completed: '已完成'
+                      };
+                      const bulletColor = groupKey === 'past' ? 'bg-rose-500' : groupKey === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500';
+                      const titleColor = groupKey === 'past' ? 'text-rose-500' : themeStyles.mutedText;
+
                       return (
                         <div key={groupKey} className="relative">
                           <div className="flex items-center gap-3 mb-4 sticky top-0 backdrop-blur-sm z-10 py-2">
-                            <div className={`w-2 h-2 rounded-full ${groupKey === 'overdue' ? 'bg-rose-500' : groupKey === 'active' ? 'bg-indigo-500' : 'bg-slate-400'}`} />
-                            <h3 className={`text-xs font-black uppercase tracking-widest ${groupKey === 'overdue' ? 'text-rose-500' : themeStyles.mutedText}`}>
-                              {t(`groups.${String(groupKey)}`)}
+                            <div className={`w-2 h-2 rounded-full ${bulletColor}`} />
+                            <h3 className={`text-xs font-black uppercase tracking-widest ${titleColor}`}>
+                              {labelMap[groupKey]}
                             </h3>
                             <span className={`text-[10px] font-bold px-2 rounded-full ${themeStyles.surfaceSoft}`}>{tasks.length}</span>
                           </div>

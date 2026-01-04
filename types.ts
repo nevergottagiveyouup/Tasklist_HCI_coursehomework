@@ -37,7 +37,7 @@ export interface Task {
   updatedAt: string;
 }
 
-export type SmartListType = 'ALL' | 'TODAY' | 'UPCOMING';
+export type SmartListType = 'ALL' | 'SHORT' | 'LONG';
 
 export interface TaskState {
   tasks: Task[];
