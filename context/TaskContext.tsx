@@ -171,6 +171,28 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('hci_tasks', JSON.stringify(state.tasks));
   }, [state.tasks]);
 
+  useEffect(() => {
+    // Periodically reconcile task status based on current time
+    const timer = setInterval(() => {
+      setState(prev => {
+        const now = new Date();
+        let changed = false;
+
+        const updatedTasks = prev.tasks.map(task => {
+          const nextStatus = deriveStatus(task, now);
+          if (nextStatus === task.status) return task;
+          changed = true;
+          return { ...task, status: nextStatus, updatedAt: new Date().toISOString() };
+        });
+
+        if (!changed) return prev;
+        return { ...prev, tasks: updatedTasks };
+      });
+    }, 30_000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
     const providedId = taskData.id;
     const newTask: Task = {
