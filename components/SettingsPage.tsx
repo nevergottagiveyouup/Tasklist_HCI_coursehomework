@@ -36,7 +36,12 @@ export const SettingsPage: React.FC = () => {
     try {
       // 先持久化主题，再保存昵称/密码
       setTheme(selectedTheme);
-      await updateProfile({ nickname: nickname.trim() || user?.username, currentPassword: currentPassword || undefined, newPassword: newPassword || undefined });
+      await updateProfile({
+        nickname: nickname.trim() || user?.username,
+        currentPassword: currentPassword || undefined,
+        newPassword: newPassword || undefined,
+        theme: selectedTheme
+      });
       setMessage('保存成功');
       setCurrentPassword('');
       setNewPassword('');

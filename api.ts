@@ -1,4 +1,5 @@
 import { TaskPriority, TaskStatus } from './types';
+import type { ThemeMode } from './context/ThemeContext';
 
 // 默认直连后端 8080，可通过 .env.local 配置 VITE_API_BASE_URL 覆盖
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
@@ -90,10 +91,10 @@ export const loginRequest = (username: string, password: string) =>
     body: JSON.stringify({ username, password })
   });
 
-export const registerRequest = (username: string, password: string) =>
+export const registerRequest = (username: string, password: string, nickname?: string, avatar?: string, theme?: ThemeMode) =>
   apiFetch('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ username, password, nickname, avatar, theme: theme ? mapThemeToApi(theme) : undefined })
   });
 
 export const fetchTasksRequest = (token: string) =>
@@ -139,3 +140,39 @@ export const mapStatusFromApi = (status: string): TaskStatus => {
       return TaskStatus.TODO;
   }
 };
+
+export const mapThemeToApi = (theme: ThemeMode | undefined) => {
+  if (!theme) return undefined;
+  if (theme === 'dark') return 'DARK';
+  if (theme === 'eye') return 'PROTECTED';
+  return 'LIGHT';
+};
+
+export const mapThemeFromApi = (value: string | undefined): ThemeMode => {
+  const normalized = (value || '').toUpperCase();
+  if (normalized === 'DARK') return 'dark';
+  if (normalized === 'PROTECTED') return 'eye';
+  return 'light';
+};
+
+export const fetchUserInfoRequest = (token: string) =>
+  apiFetch<{ username: string; nickname?: string; avatar?: string; theme?: string }>('/api/user/info', {
+    method: 'GET',
+    token
+  });
+
+export const updateProfileRequest = (
+  payload: { nickname?: string; avatar?: string; theme?: ThemeMode; currentPassword?: string; newPassword?: string },
+  token: string
+) =>
+  apiFetch<{ username: string; nickname?: string; avatar?: string; theme?: string }>('/api/user/profile', {
+    method: 'PUT',
+    body: JSON.stringify({
+      nickname: payload.nickname,
+      avatar: payload.avatar,
+      theme: mapThemeToApi(payload.theme),
+      currentPassword: payload.currentPassword,
+      newPassword: payload.newPassword
+    }),
+    token
+  });

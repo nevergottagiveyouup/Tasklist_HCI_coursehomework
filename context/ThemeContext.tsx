@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-type ThemeMode = 'light' | 'dark' | 'eye';
+export type ThemeMode = 'light' | 'dark' | 'eye';
 
 type ThemeContextType = {
   theme: ThemeMode;
